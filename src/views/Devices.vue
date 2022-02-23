@@ -51,21 +51,23 @@ const manufacturer = ref([
   "OPPO",
   "vivo",
   "samsung",
+  "HONOR",
   "Meizu",
   "Google",
   "OnePlus",
   "360",
+  "blackshark",
   "Yulong",
+  "BBK",
+  "nubia",
+  "realme",
+  "GIONEE",
+  "HTC",
   "LGE",
   "Sony",
   "motorola",
   "asus",
-  "GIONEE",
   "Lenovo",
-  "HTC",
-  "BBK",
-  "nubia",
-  "realme"
 ]);
 const statusList = ref([
   {
@@ -530,7 +532,7 @@ onUnmounted(() => {
                 <el-checkbox v-for="man in manufacturer" :key="man" :label="man">
                   <img
                       v-if="
-                  man === 'HUAWEI' || man === 'samsung' || man === 'OnePlus'||man === 'GIONEE'|| man === 'motorola'
+                  man === 'HUAWEI' || man === 'samsung' || man === 'OnePlus'||man === 'GIONEE'|| man === 'motorola' || man==='HONOR'
                 "
                       style="width: 80px"
                       :src="getImg(man)"
@@ -538,6 +540,11 @@ onUnmounted(() => {
                   <img
                       v-else-if="man === 'Xiaomi' ||man === 'APPLE'|| man==='LGE' || man==='HTC'"
                       style="width: 30px"
+                      :src="getImg(man)"
+                  />
+                  <img
+                      v-else-if="man==='blackshark'"
+                      style="width: 22px"
                       :src="getImg(man)"
                   />
                   <img
@@ -679,15 +686,18 @@ onUnmounted(() => {
                     </el-form-item>
                     <el-form-item label="制造商">
                       <img
-                          v-if="
-                  device.manufacturer === 'HUAWEI' || device.manufacturer === 'samsung' || device.manufacturer === 'OnePlus'||device.manufacturer === 'GIONEE'|| device.manufacturer === 'motorola'
-                "
+                          v-if="device.manufacturer === 'HUAWEI' || device.manufacturer === 'samsung' || device.manufacturer === 'OnePlus'||device.manufacturer === 'GIONEE'|| device.manufacturer === 'motorola'|| device.manufacturer === 'HONOR'"
                           style="width: 80px"
                           :src="getImg(device.manufacturer)"
                       />
                       <img
                           v-else-if="device.manufacturer === 'Xiaomi' ||device.manufacturer === 'APPLE'||device.manufacturer === 'LGE'||device.manufacturer === 'HTC'"
                           style="width: 30px"
+                          :src="getImg(device.manufacturer)"
+                      />
+                      <img
+                          v-else-if="device.manufacturer === 'blackshark'"
+                          style="width: 22px"
                           :src="getImg(device.manufacturer)"
                       />
                       <img
