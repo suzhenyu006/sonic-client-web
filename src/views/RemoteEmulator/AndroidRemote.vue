@@ -5,11 +5,12 @@ import {useStore} from 'vuex';
 import axios from '@/http/axios';
 import {ElMessage} from 'element-plus';
 import useClipboard from 'vue-clipboard3';
+import ColorImg from '@/components/ColorImg.vue';
 import StepList from '@/components/StepList.vue';
 import TestCaseList from '@/components/TestCaseList.vue';
 import StepLog from '@/components/StepLog.vue';
 import ElementUpdate from '@/components/ElementUpdate.vue';
-import Pageable from '@/components/Pageable.vue'
+import Pageable from '@/components/Pageable.vue';
 import defaultLogo from '@/assets/logo.png';
 import {
   VideoPause,
@@ -40,16 +41,25 @@ import {
   View,
   InfoFilled,
   Bell,
-  Service
+  Service,
+  VideoCamera,
 } from '@element-plus/icons';
-import RenderDeviceName from "../../components/RenderDeviceName.vue";
-import AudioProcessor from '@/lib/audio-processor'
+import RenderDeviceName from '../../components/RenderDeviceName.vue';
+import AudioProcessor from '@/lib/audio-processor';
+import wifiLogo from '@/assets/img/wifi.png';
+import Scrcpy from './Scrcpy';
 
 const {toClipboard} = useClipboard();
 const route = useRoute();
 const store = useStore();
 const router = useRouter();
-const filterAppText = ref("")
+const wifiList = ref([]);
+const currentWifi = ref('');
+const isConnectWifi = ref(false);
+const remoteAppiumPort = ref(0);
+const proxyWebPort = ref(0);
+const proxyConnPort = ref(0);
+const filterAppText = ref('');
 const iFrameHeight = ref(0);
 const terminalHeight = ref(0);
 const caseList = ref(null);
@@ -57,7 +67,7 @@ const loading = ref(false);
 const appList = ref([]);
 const device = ref({});
 const agent = ref({});
-const screenUrls = ref([])
+const screenUrls = ref([]);
 const uploadUrl = ref('');
 const text = ref({content: ''});
 let imgWidth = 0;
@@ -65,12 +75,6 @@ let imgHeight = 0;
 // 旋转状态 // 0 90 180 270
 let directionStatus = {
   value: -1,
-  // calcMap: {
-  //   0: 1,
-  //   90: 1,
-  //   180: 1,
-  //   270: -1,
-  // }
 };
 let moveX = 0;
 let moveY = 0;
@@ -79,9 +83,11 @@ let isPress = false;
 let loop = null;
 let time = 0;
 let isLongPress = false;
-// let isRotated = 0; // 是否转向 // 0 90 180 270
 let mouseMoveTime = 0;
+let touchWrapper = null;
 const pic = ref('高');
+const _screenMode = window.localStorage.getItem('screenMode');
+const screenMode = ref(_screenMode || 'Scrcpy'); // Scrcpy,Minicap
 const elementLoading = ref(false);
 const isShowImg = ref(false);
 const isDriverFinish = ref(false);
@@ -119,7 +125,7 @@ const terScroll = ref(null);
 const logcatScroll = ref(null);
 const cmdIsDone = ref(true);
 const uploadLoading = ref(false);
-const remoteAdbUrl = ref("");
+const remoteAdbUrl = ref('');
 const logcatFilter = ref({
   level: 'E',
   filter: '',
@@ -142,9 +148,12 @@ const computedCenter = (b1, b2) => {
   return x + ',' + y;
 };
 const switchTabs = (e) => {
+  // if (e.props.name === 'proxy') {
+  //   getWifiList();
+  // }
   if (e.props.name === 'apps') {
     if (appList.value.length === 0) {
-      refreshAppList()
+      refreshAppList();
     }
   }
   if (e.props.name === 'terminal') {
@@ -158,6 +167,8 @@ const switchTabs = (e) => {
 };
 const img = import.meta.globEager('../../assets/img/*');
 let websocket = null;
+let screenWebsocket = null;
+let __Scrcpy = null; // 实例
 let terminalWebsocket = null;
 
 defineProps({
@@ -180,7 +191,7 @@ const tabWebView = (port, id, transTitle) => {
       + ':' + agent.value['port'] + '/websockets/webView/'
       + agent.value['secretKey'] + '/' + port + '/' + id;
   nextTick(() => {
-    iFrameHeight.value = document.getElementById('pressKey').offsetTop - 50;
+    iFrameHeight.value = document.body.clientHeight - 280;
   });
 };
 const saveEle = () => {
@@ -223,21 +234,21 @@ const transformPageable = (data) => {
     appListPageData.value.push(data.slice(start, len));
   }
   currAppListPageData.value = appListPageData.value[currAppListPageIndex.value];
-}
+};
 const changeAppListPage = (pageNum) => {
   currAppListPageIndex.value = pageNum - 1;
   currAppListPageData.value = appListPageData.value[currAppListPageIndex.value];
-}
+};
 const filterTableData = computed(() => {
   const list = appList.value.filter(
       (data) =>
           !filterAppText.value ||
           data.appName.toLowerCase().includes(filterAppText.value.toLowerCase()) ||
-          data.packageName.toLowerCase().includes(filterAppText.value.toLowerCase())
-  )
+          data.packageName.toLowerCase().includes(filterAppText.value.toLowerCase()),
+  );
   transformPageable(list);
   return list;
-})
+});
 const fixTouch = () => {
   ElMessage.success({
     message: '修复成功！',
@@ -277,7 +288,7 @@ const filterNode = (value, data) => {
       (data.detail['resource-id'] ? data.detail['resource-id'].indexOf(value) !== -1 : false);
 };
 const findBestXpath = (elementDetail) => {
-  let result = []
+  let result = [];
   if (elementDetail['resource-id']) {
     result.push('//' + elementDetail['class']
         + '[@resource-id=\'' + elementDetail['resource-id'] + '\']');
@@ -295,17 +306,17 @@ const findBestXpath = (elementDetail) => {
         + '[contains(@content-desc,\'' + elementDetail['content-desc'] + '\')]');
   }
   return result;
-}
+};
 const downloadImg = (url) => {
   let time = new Date().getTime();
   let link = document.createElement('a');
   fetch(url).then(res => res.blob()).then(blob => {
     link.href = URL.createObjectURL(blob);
-    link.download = time + ".jpg";
+    link.download = time + '.jpg';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-  })
+  });
 };
 const copy = (value) => {
   try {
@@ -321,7 +332,7 @@ const copy = (value) => {
 };
 const removeScreen = () => {
   screenUrls.value = [];
-}
+};
 const quickCap = () => {
   if (oldBlob) {
     const img = new Image();
@@ -335,7 +346,7 @@ const quickCap = () => {
       message: '快速截图失败！',
     });
   }
-}
+};
 const setImgData = (data) => {
   const img = new Image();
   if (data) {
@@ -357,9 +368,20 @@ const setImgData = (data) => {
 };
 const openSocket = (host, port, udId, key) => {
   if ('WebSocket' in window) {
+    //
     websocket = new WebSocket(
         'ws://' + host + ':' + port + '/websockets/android/' + udId + '/' + key + '/' + localStorage.getItem('SonicToken'),
     );
+    //
+    __Scrcpy = new Scrcpy({
+      socketURL: 'ws://' + host + ':' + port + '/websockets/android/screen/' + udId + '/' + key + '/' + localStorage.getItem('SonicToken'),
+      node: 'scrcpy-video',
+      onmessage: screenWebsocketOnmessage,
+      excuteMode: screenMode.value
+    });
+    screenWebsocket = __Scrcpy.websocket;
+    changeScreenMode(screenMode.value, 1)
+    //
     terminalWebsocket = new WebSocket(
         'ws://' + host + ':' + port + '/websockets/terminal/' + udId + '/' + key,
     );
@@ -382,6 +404,13 @@ const sendLogcat = () => {
       }),
   );
 };
+// const getWifiList = () => {
+//   terminalWebsocket.send(
+//       JSON.stringify({
+//         type: 'wifiList',
+//       }),
+//   );
+// };
 const clearLogcat = () => {
   logcatOutPut.value = [];
 };
@@ -419,8 +448,13 @@ const stopCmd = () => {
 };
 const terminalWebsocketOnmessage = (message) => {
   switch (JSON.parse(message.data)['msg']) {
+      // case 'wifiList': {
+      //   isConnectWifi.value = JSON.parse(message.data).detail.connectWifi;
+      //   currentWifi.value = JSON.parse(message.data).detail.connectedWifi.sSID;
+      //   break;
+      // }
     case 'appListDetail': {
-      appList.value.push(JSON.parse(message.data).detail)
+      appList.value.push(JSON.parse(message.data).detail);
       break;
     }
     case 'logcat':
@@ -464,7 +498,8 @@ const terminalWebsocketOnmessage = (message) => {
       break;
   }
 };
-const websocketOnmessage = (message) => {
+const screenWebsocketOnmessage = (message) => {
+  // console.log('screenWebsocketOnmessage', message.data);
   if (typeof message.data === 'object') {
     oldBlob = message.data;
     const blob = new Blob([message.data], {type: 'image/jpeg'});
@@ -483,12 +518,6 @@ const websocketOnmessage = (message) => {
     img.src = u;
   } else {
     switch (JSON.parse(message.data)['msg']) {
-      case 'adbkit': {
-        if (JSON.parse(message.data).isEnable) {
-          remoteAdbUrl.value = agent.value['host'] + ":" + JSON.parse(message.data).port
-        }
-        break;
-      }
       case 'rotation': {
         if (directionStatus.value !== -1) {
           loading.value = true;
@@ -497,6 +526,11 @@ const websocketOnmessage = (message) => {
           });
         }
         directionStatus.value = JSON.parse(message.data).value; // TODO
+        // 旋转需要重置一下jmuxer
+        if (screenMode.value == 'Scrcpy') {
+          // 重置播放器
+          __Scrcpy.jmuxer && __Scrcpy.jmuxer.reset()
+        }
         break;
       }
       case 'support': {
@@ -512,115 +546,144 @@ const websocketOnmessage = (message) => {
         loading.value = false;
         break;
       }
-      case 'tree': {
-        ElMessage.success({
-          message: '获取控件元素成功！',
-        });
-        let result = JSON.parse(message.data);
-        currentId.value = [1];
-        elementData.value = result.detail;
-        isShowTree.value = true;
-        elementLoading.value = false;
-        if (result.img) {
-          setImgData(result.img);
-        }
-        webViewData.value = result['webView'];
-        activity.value = result['activity'];
-        break;
-      }
-      case 'treeFail': {
-        ElMessage.error({
-          message: '获取控件元素失败！请重新获取',
-        });
-        elementLoading.value = false;
-        break;
-      }
-      case 'installFinish': {
-        if (JSON.parse(message.data).status === 'success') {
-          ElMessage.success({
-            message: '安装成功！',
-          });
-        } else {
-          ElMessage.error({
-            message: '安装失败！',
-          });
-        }
-        break;
-      }
-      case 'uninstallFinish': {
-        if (JSON.parse(message.data).detail === 'success') {
-          ElMessage.success({
-            message: '卸载成功！',
-          });
-        } else {
-          ElMessage.error({
-            message: '卸载失败！',
-          });
-        }
-        break;
-      }
-      case 'openDriver': {
-        ElMessage({
-          type: JSON.parse(message.data).status,
-          message: JSON.parse(message.data).detail,
-        });
-        if (JSON.parse(message.data).status === 'success') {
-          isDriverFinish.value = true;
-        }
-        break;
-      }
       case 'picFinish': {
         loading.value = false;
         break;
       }
-      case 'step': {
-        setStepLog(JSON.parse(message.data));
-        break;
-      }
-      case 'status': {
-        debugLoading.value = false;
-        ElMessage.info({
-          message: '运行完毕！',
-        });
-        break;
-      }
-      case 'forwardView': {
-        webViewLoading.value = false;
-        ElMessage.success({
-          message: '获取成功！',
-        });
-        webViewListDetail.value = JSON.parse(message.data)['detail'];
-        chromePort.value = JSON.parse(message.data)['chromePort'];
-        break;
-      }
-      case 'eleScreen': {
-        if (JSON.parse(message.data).img) {
-          ElMessage.success({
-            message: '获取快照成功！',
-          });
-          imgElementUrl.value = JSON.parse(message.data)['img'];
-          dialogImgElement.value = true;
-        } else {
-          ElMessage.error(JSON.parse(message.data)['errMsg']);
-        }
-        elementScreenLoading.value = false;
-        break;
-      }
-      case 'error': {
+      case 'error':
         ElMessage.error({
           message: '系统出现异常！已断开远程控制！',
         });
         close();
         router.go(-1);
         break;
+    }
+  }
+};
+const websocketOnmessage = (message) => {
+  switch (JSON.parse(message.data)['msg']) {
+    case 'proxyResult': {
+      proxyWebPort.value = JSON.parse(message.data).webPort;
+      proxyConnPort.value = JSON.parse(message.data).port;
+      nextTick(() => {
+        iFrameHeight.value = document.body.clientHeight - 280;
+      });
+      break;
+    }
+    case 'appiumPort': {
+      remoteAppiumPort.value = JSON.parse(message.data).port;
+      break;
+    }
+    case 'adbkit': {
+      if (JSON.parse(message.data).isEnable) {
+        remoteAdbUrl.value = agent.value['host'] + ':' + JSON.parse(message.data).port;
       }
+      break;
+    }
+    case 'tree': {
+      ElMessage.success({
+        message: '获取控件元素成功！',
+      });
+      let result = JSON.parse(message.data);
+      currentId.value = [1];
+      elementData.value = result.detail;
+      isShowTree.value = true;
+      elementLoading.value = false;
+      if (result.img) {
+        setImgData(result.img);
+      }
+      webViewData.value = result['webView'];
+      activity.value = result['activity'];
+      break;
+    }
+    case 'treeFail': {
+      ElMessage.error({
+        message: '获取控件元素失败！请重新获取',
+      });
+      elementLoading.value = false;
+      break;
+    }
+    case 'installFinish': {
+      if (JSON.parse(message.data).status === 'success') {
+        ElMessage.success({
+          message: '安装成功！',
+        });
+      } else {
+        ElMessage.error({
+          message: '安装失败！',
+        });
+      }
+      break;
+    }
+    case 'uninstallFinish': {
+      if (JSON.parse(message.data).detail === 'success') {
+        ElMessage.success({
+          message: '卸载成功！',
+        });
+      } else {
+        ElMessage.error({
+          message: '卸载失败！',
+        });
+      }
+      break;
+    }
+    case 'openDriver': {
+      ElMessage({
+        type: JSON.parse(message.data).status,
+        message: JSON.parse(message.data).detail,
+      });
+      if (JSON.parse(message.data).status === 'success') {
+        isDriverFinish.value = true;
+      }
+      break;
+    }
+    case 'step': {
+      setStepLog(JSON.parse(message.data));
+      break;
+    }
+    case 'status': {
+      debugLoading.value = false;
+      ElMessage.info({
+        message: '运行完毕！',
+      });
+      break;
+    }
+    case 'forwardView': {
+      webViewLoading.value = false;
+      ElMessage.success({
+        message: '获取成功！',
+      });
+      webViewListDetail.value = JSON.parse(message.data)['detail'];
+      chromePort.value = JSON.parse(message.data)['chromePort'];
+      break;
+    }
+    case 'eleScreen': {
+      if (JSON.parse(message.data).img) {
+        ElMessage.success({
+          message: '获取快照成功！',
+        });
+        imgElementUrl.value = JSON.parse(message.data)['img'];
+        dialogImgElement.value = true;
+      } else {
+        ElMessage.error(JSON.parse(message.data)['errMsg']);
+      }
+      elementScreenLoading.value = false;
+      break;
+    }
+    case 'error': {
+      ElMessage.error({
+        message: '系统出现异常！已断开远程控制！',
+      });
+      close();
+      router.go(-1);
+      break;
     }
   }
 };
 const getCurLocation = () => {
   let x, y;
   let _x, _y;
-  const canvas = document.getElementById('canvas');
+  const canvas = touchWrapper;
   const rect = canvas.getBoundingClientRect();
   if (directionStatus.value != 0 && directionStatus.value != 180) { // 左右旋转
     _x = parseInt(
@@ -649,9 +712,9 @@ const getCurLocation = () => {
   }
   // console.log('xy', { x, y });
   return ({
-    x, y
-  })
-}
+    x, y,
+  });
+};
 const mouseup = (event) => {
   if (!isFixTouch) {
     if (isPress) {
@@ -666,7 +729,7 @@ const mouseup = (event) => {
   } else {
     clearInterval(loop);
     time = 0;
-    const canvas = document.getElementById('canvas');
+    const canvas = touchWrapper;
     const rect = canvas.getBoundingClientRect();
     let x;
     let y;
@@ -718,7 +781,7 @@ const mouseleave = () => {
   }
 };
 const mousedown = (event) => {
-  const canvas = document.getElementById('canvas');
+  const canvas = touchWrapper;
   const rect = canvas.getBoundingClientRect();
   if (!isFixTouch) { // 安卓高版本
     const {x, y} = getCurLocation();
@@ -777,7 +840,7 @@ const touchstart = async (event) => {
   const debugPic = document.getElementById('debugPic');
   const rect = debugPic.getBoundingClientRect();
   const x = parseInt(
-      (event.clientX - rect.left) * (imgWidth / debugPic.clientWidth)
+      (event.clientX - rect.left) * (imgWidth / debugPic.clientWidth),
   );
   // _x = parseInt(
   //     (event.clientY - rect.top) *
@@ -885,12 +948,26 @@ const searchDevice = () => {
       }),
   );
 };
+const startProxy = () => {
+  websocket.send(
+      JSON.stringify({
+        type: 'proxy',
+      }),
+  );
+};
+const installCert = () => {
+  websocket.send(
+      JSON.stringify({
+        type: 'installCert',
+      }),
+  );
+};
 const openApp = (pkg) => {
   websocket.send(
       JSON.stringify({
         type: 'debug',
         detail: 'openApp',
-        pkg
+        pkg,
       }),
   );
 };
@@ -901,7 +978,17 @@ const refreshAppList = () => {
   });
   terminalWebsocket.send(
       JSON.stringify({
-        type: 'appList'
+        type: 'appList',
+      }),
+  );
+};
+const clearProxy = () => {
+  ElMessage.success({
+    message: '已取消自动全局代理，请手动配置代理',
+  });
+  websocket.send(
+      JSON.stringify({
+        type: 'clearProxy',
       }),
   );
 };
@@ -912,7 +999,7 @@ const uninstallApp = (pkg) => {
   websocket.send(
       JSON.stringify({
         type: 'uninstallApp',
-        detail: pkg
+        detail: pkg,
       }),
   );
 };
@@ -997,12 +1084,22 @@ const changePic = (type) => {
       pic = 'fixed';
       break;
   }
-  websocket.send(
+  screenWebsocket.send(
       JSON.stringify({
         type: 'pic',
         detail: pic,
       }),
   );
+};
+const changeScreenMode = (type, isInit) => {
+  if (isInit !== 1) {
+    loading.value = true;
+    __Scrcpy.switchMode(type);
+    screenMode.value = type;
+  }
+  touchWrapper = type == 'Minicap' ? document.getElementById('canvas') : document.getElementById('scrcpy-video');
+  // 储存最后模式
+  window.localStorage.setItem('screenMode', type);
 };
 const beforeAvatarUpload = (file) => {
   if (file.name.endsWith('.jpg') || file.name.endsWith('.png')) {
@@ -1114,12 +1211,18 @@ const close = () => {
     websocket.close();
     websocket = null;
   }
+  if (screenWebsocket !== null) {
+    screenWebsocket.close();
+    screenWebsocket = null;
+    __Scrcpy && __Scrcpy.destroy();
+    __Scrcpy = null;
+  }
   if (terminalWebsocket !== null) {
     terminalWebsocket.close();
     terminalWebsocket = null;
   }
   if (audioPlayer !== null) {
-    destroyAudio()
+    destroyAudio();
   }
 };
 onBeforeUnmount(() => {
@@ -1160,11 +1263,11 @@ const initAudioPlayer = () => {
     wsUrl: 'ws://' + agent.value['host'] + ':' + agent.value['port'] + '/websockets/audio/' + agent.value['secretKey'] + '/' + device.value['udId'],
     onReady() {
       isConnectAudio.value = true;
-    }
+    },
   });
   audioPlayer.ws.onError(function () {
-    destroyAudio()
-  })
+    destroyAudio();
+  });
 };
 const playAudio = () => {
   if (audioPlayer) {
@@ -1193,7 +1296,7 @@ const resetAudioPlayer = () => {
   ElMessage.success({
     message: '远程音频同步成功！',
   });
-}
+};
 
 onMounted(() => {
   if (store.state.project.id) {
@@ -1335,6 +1438,17 @@ onMounted(() => {
             </div>
           </template>
           <div style="margin-right: 40px; text-align: center">
+            <video
+                id="scrcpy-video"
+                @mouseup="mouseup"
+                @mousemove="mousemove"
+                @mousedown="mousedown"
+                @mouseleave="mouseleave"
+                style="display: inline-block; min-height: 100%"
+                :style="canvasRectInfo"
+                autoplay
+                v-show="screenMode == 'Scrcpy'"
+            />
             <canvas
                 id="canvas"
                 @mouseup="mouseup"
@@ -1343,6 +1457,7 @@ onMounted(() => {
                 @mouseleave="mouseleave"
                 style="display: inline-block"
                 :style="canvasRectInfo"
+                v-show="screenMode != 'Scrcpy'"
             />
             <audio id="audio-player" hidden></audio>
             <el-button-group id="pressKey">
@@ -1389,6 +1504,45 @@ onMounted(() => {
             </el-button-group>
           </div>
           <div style="position: absolute; right: 5px; top: 10px">
+            <el-tooltip
+                :enterable="false"
+                effect="dark"
+                content="投屏模式"
+                :placement="tabPosition == 'left' ? 'right' : 'left'"
+                :offset="15"
+            >
+              <div>
+                <el-dropdown
+                    :hide-on-click="false"
+                    trigger="click"
+                    placement="right"
+                    style="margin-top: 4px"
+                >
+                  <el-button
+                      size="small"
+                      type="info"
+                      circle
+                  >
+                    <el-icon :size="12" style="vertical-align: middle;">
+                      <VideoCamera/>
+                    </el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu class="divider">
+                      <el-radio-group
+                          v-loading="loading"
+                          v-model="screenMode"
+                          size="mini"
+                          @change="changeScreenMode"
+                      >
+                        <el-radio-button label="Scrcpy"></el-radio-button>
+                        <el-radio-button label="Minicap"></el-radio-button>
+                      </el-radio-group>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </div>
+            </el-tooltip>
             <el-tooltip
                 :enterable="false"
                 effect="dark"
@@ -1465,6 +1619,7 @@ onMounted(() => {
                               size="small"
                               type="info"
                               circle
+                              :disabled="screenMode !== 'Minicap'"
                               @click="changePic('fixed')"
                           >
                             <el-icon :size="14" style="vertical-align: middle;">
@@ -1858,26 +2013,42 @@ onMounted(() => {
                 </el-card>
               </el-col>
               <el-col :span="8">
-                <el-card>
-                  <template #header>
-                    <strong>远程连接ADB</strong>
-                  </template>
-                  <div v-if="remoteAdbUrl.length>0" style="margin-top: 8px;margin-bottom: 8px">
-                    <el-card :body-style="{backgroundColor:'#303133',cursor:'pointer'}"
-                             @click="copy('adb connect '+remoteAdbUrl)">
-                      <strong style="color: #F2F6FC">adb connect {{ remoteAdbUrl }}</strong>
-                    </el-card>
-                  </div>
-                  <div v-else v-loading="remoteAdbUrl.length===0"
-                       element-loading-spinner="el-icon-lock"
-                       element-loading-background="rgba(255, 255, 255, 1)"
-                       element-loading-text="所在Agent未开启该功能！"
-                       style="margin-top: 8px;margin-bottom: 8px">
-                    <el-card>
-                      <strong>所在Agent未开启该功能！</strong>
-                    </el-card>
-                  </div>
-                </el-card>
+                <el-tabs type="border-card" stretch>
+                  <el-tab-pane label="远程ADB">
+                    <div v-if="remoteAdbUrl.length>0" style="margin-top: 20px;margin-bottom: 20px">
+                      <el-card :body-style="{backgroundColor:'#303133',cursor:'pointer'}"
+                               @click="copy('adb connect '+remoteAdbUrl)">
+                        <strong style="color: #F2F6FC">adb connect {{ remoteAdbUrl }}</strong>
+                      </el-card>
+                    </div>
+                    <div v-else v-loading="remoteAdbUrl.length===0"
+                         element-loading-spinner="el-icon-lock"
+                         element-loading-background="rgba(255, 255, 255, 1)"
+                         element-loading-text="所在Agent未开启该功能！"
+                         style="margin-top: 18px;margin-bottom: 18px">
+                      <el-card>
+                        <strong>所在Agent未开启该功能！</strong>
+                      </el-card>
+                    </div>
+                  </el-tab-pane>
+                  <el-tab-pane label="远程Appium">
+                    <div v-if="remoteAppiumPort!==0" style="margin-top: 20px;margin-bottom: 20px">
+                      <el-card :body-style="{backgroundColor:'#303133',cursor:'pointer'}"
+                               @click="copy('http://'+agent['host']+':'+remoteAppiumPort+'/wd/hub')">
+                        <strong style="color: #F2F6FC">http://{{ agent['host'] }}:{{ remoteAppiumPort }}/wd/hub</strong>
+                      </el-card>
+                    </div>
+                    <div v-else v-loading="remoteAppiumPort===0"
+                         element-loading-spinner="el-icon-lock"
+                         element-loading-background="rgba(255, 255, 255, 1)"
+                         element-loading-text="Appium启动失败！"
+                         style="margin-top: 18px;margin-bottom: 18px">
+                      <el-card>
+                        <strong>Appium启动失败！</strong>
+                      </el-card>
+                    </div>
+                  </el-tab-pane>
+                </el-tabs>
               </el-col>
               <el-col :span="8">
                 <el-card>
@@ -2042,9 +2213,47 @@ onMounted(() => {
                   :isPageSet="false"
                   :total="filterTableData.length"
                   :current-page="currAppListPageIndex + 1"
-                  :page-size="10"
+                  :page-size="7"
                   @change="changeAppListPage"
               ></Pageable>
+            </el-card>
+          </el-tab-pane>
+          <el-tab-pane label="网络抓包" name="proxy">
+            <el-button size="small" type="success" @click="startProxy">开始抓包</el-button>
+            <el-button size="small" @click="installCert">下载证书</el-button>
+            <el-button size="small" @click="clearProxy">取消全局代理</el-button>
+            <strong v-if="proxyConnPort!==0"
+                    style="color: #67c23a;float: right;margin-top: 5px">代理连接：{{
+                agent['host'] + ':' + proxyConnPort
+              }}</strong>
+            <!--            <span style="float: right;display: flex;-->
+            <!--			   align-items: center;">-->
+            <!--              <el-button size="mini" @click="getWifiList" style="margin-right: 6px">刷新</el-button>-->
+            <!--              <ColorImg-->
+            <!--                  :src="wifiLogo"-->
+            <!--                  :width="18"-->
+            <!--                  :height="18"-->
+            <!--                  :color="isConnectWifi?'#67C23A':'#F56C6C'"-->
+            <!--              />-->
+            <!--              <span style="margin-left:6px;color: #67C23A;font-size: 16px">{{-->
+            <!--                  (currentWifi.length > 0 && isConnectWifi) ? currentWifi.replaceAll('"', '') : ' '-->
+            <!--                }}</span>-->
+            <!--            </span>-->
+            <iframe v-if="proxyWebPort!==0"
+                    :style="'border:1px solid #C0C4CC;;width: 100%;height: '+iFrameHeight+'px;margin-top:15px'"
+                    :src="'http://'+agent['host']+':'+proxyWebPort"></iframe>
+            <el-card v-else style="margin-top:20px">
+              <template #header><strong>使用教学</strong></template>
+              <div style="height: 300px">
+                <el-steps direction="vertical" :active="3">
+                  <el-step title="连接Wifi" status="process"
+                           description="未连接Wifi的话，需前往Wifi列表连接你的Wifi。Wifi需要与Agent的网络互通，连接后点击刷新重新获取Wifi状态"/>
+                  <el-step title="安装证书" status="process"
+                           description="首次抓包需要安装证书，点击下载按钮后下载证书并安装。如浏览器无法访问，请确认Agent已关闭防火墙。"/>
+                  <el-step title="开始抓包" status="process"
+                           description="点击开始抓包后，就可以开始体验啦！（默认自动全局代理，如果不需要可以点击取消全局代理按钮，然后自行前往Wifi页面手动配置）"/>
+                </el-steps>
+              </div>
             </el-card>
           </el-tab-pane>
           <el-tab-pane label="快速截图" name="screenCap">
