@@ -1,4 +1,20 @@
 <script setup>
+/*
+ *  Copyright (C) [SonicCloudOrg] Sonic Project
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *         http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ */
 import {onMounted, ref} from "vue";
 import {Tickets, QuestionFilled} from "@element-plus/icons";
 import ElementSelect from './ElementSelect.vue'
@@ -814,6 +830,8 @@ onMounted(() => {
     </div>
 
     <div v-if="step.stepType === 'openApp'">
+      <el-alert show-icon style="margin-bottom:10px" close-text="Get!" type="info"
+                title="TIPS: 需要临时变量或全局变量时，可以添加{{变量名}}的形式"/>
       <el-form-item
           prop="text"
           label="打开应用"
@@ -831,6 +849,8 @@ onMounted(() => {
     </div>
 
     <div v-if="step.stepType === 'terminate'">
+      <el-alert show-icon style="margin-bottom:10px" close-text="Get!" type="info"
+                title="TIPS: 需要临时变量或全局变量时，可以添加{{变量名}}的形式"/>
       <el-form-item
           prop="text"
           label="终止应用"
@@ -848,6 +868,8 @@ onMounted(() => {
     </div>
 
     <div v-if="step.stepType === 'install'">
+      <el-alert show-icon style="margin-bottom:10px" close-text="Get!" type="info"
+                title="TIPS: 需要临时变量或全局变量时，可以添加{{变量名}}的形式"/>
       <el-form-item
           prop="text"
           label="安装路径"
@@ -865,6 +887,8 @@ onMounted(() => {
     </div>
 
     <div v-if="step.stepType === 'uninstall'">
+      <el-alert show-icon style="margin-bottom:10px" close-text="Get!" type="info"
+                title="TIPS: 需要临时变量或全局变量时，可以添加{{变量名}}的形式"/>
       <el-form-item
           prop="text"
           label="卸载应用"

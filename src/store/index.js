@@ -1,6 +1,12 @@
 import {createStore} from 'vuex'
+import {localeSetting} from '@/config/locale'
+import {LOCALE_KEY} from '@/config/cache'
+import {setLocal, getLocal} from '@/utils/cache/localStorage'
+
+const debug = process.env.NODE_ENV !== 'production';
 
 export default createStore({
+    strict: debug,
     state() {
         return {
             userInfo: {},
@@ -10,19 +16,28 @@ export default createStore({
             projectList: [],
             menuBack: "",
             menuText: "",
-            menuActiveText: ""
+            menuActiveText: "",
+            cabinetBack: "",
+            cabinetItemBack: "",
+            currentTheme: 'light',
+            localInfo: getLocal(LOCALE_KEY) || localeSetting
         }
     },
     mutations: {
         saveTheme(state, payload) {
+            state.currentTheme = payload
             if (payload === 'light') {
                 state.menuBack = "#ffffff"
                 state.menuText = "#909399"
                 state.menuActiveText = "#409EFF"
+                state.cabinetBack = "#ffffff"
+                state.cabinetItemBack = "#ffffff"
             } else {
                 state.menuBack = "#545c64"
                 state.menuText = "#ffffff"
                 state.menuActiveText = "#ffd04b"
+                state.cabinetBack = "#303133"
+                state.cabinetItemBack = "#606266"
             }
         },
         saveProjectList(state, payload) {
@@ -50,6 +65,22 @@ export default createStore({
             state.token = '';
             state.userInfo = {};
             localStorage.removeItem('SonicToken');
+        },
+        setLocaleInfo(state, info) {
+            state.localInfo = info
         }
     },
+    getters: {
+        getLocale(state) {
+            return state.localInfo?.locale ?? 'zh_CN';
+        }
+    },
+    actions: {
+        // 设置国际化相关信息
+        changeLocaleInfo({commit, state}, info) {
+            const localInfo = {...state.localInfo, ...info};
+            commit('setLocaleInfo', localInfo);
+            setLocal(LOCALE_KEY, localInfo);
+        }
+    }
 });

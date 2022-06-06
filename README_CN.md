@@ -32,7 +32,7 @@
 </p>
 
 ### 官方网站
-[Sonic Official Website](http://sonic-cloud.gitee.io)
+[Sonic Official Website](https://sonic-cloud.gitee.io)
 ## 背景
 
 #### 什么是Sonic？
@@ -97,4 +97,4 @@ docker build -t sonicorg/sonic-client-web .
 
 ## 开源许可协议
 
-[MIT License](LICENSE)
+[License](LICENSE)

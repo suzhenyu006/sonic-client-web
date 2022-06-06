@@ -32,7 +32,7 @@
 </p>
 
 ### Official Website
-[Sonic Official Website](http://sonic-cloud.gitee.io)
+[Sonic Official Website](https://sonic-cloud.gitee.io)
 ## Background
 
 #### What is sonic ?
@@ -96,4 +96,4 @@ Thank you to all our sponsors!
 
 ## LICENSE
 
-[MIT License](LICENSE)
+[License](LICENSE)
